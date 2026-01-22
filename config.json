@@ -1,0 +1,9 @@
+{
+	"clientId": "1463768124196257886",
+
+	"guildBinding": "dev",
+	"devGuildId": "602596055711875081",
+	"productionGuildId": "",
+
+	"minimumCooldownTimeMs": 500
+}
