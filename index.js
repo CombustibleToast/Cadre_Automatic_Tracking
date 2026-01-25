@@ -1,18 +1,21 @@
 // Node utilities
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Discord.js imports
-const {Client, Events, GatewayIntentBits, Collection} = require("discord.js")
-const {token} = require("./secrets.json")
+import {Client, Events, GatewayIntentBits, Collection} from "discord.js";
+import config from "./secrets.json" with { type: 'json' };
+const token = config.token;
 
 // Init client
-const client = new Client({intents: [GatewayIntentBits.Guilds]})
+const client = new Client({intents: [GatewayIntentBits.Guilds]});
 
 // Login
-client.login(token)
+client.login(token);
 
 // Load commands
+const __dirname = import.meta.dirname; //ESM Compatibility
+
 // Find all command files
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'lib/slash_commands');
@@ -20,7 +23,7 @@ const commandFiles = [];
 getAllNestedFiles(commandsPath, commandFiles);
 // Put commands in the collection
 for (const file of commandFiles) {
-    const command = require(file);
+    const command = await import(file);
     // Set a new item in the Collection with the key as the command name and the value as the exported module
     if ('data' in command && 'execute' in command) {
         client.commands.set(command.data.name, command);
@@ -35,21 +38,33 @@ const functionsPath = path.join(__dirname, 'lib/functions');
 const functionFiles = [];
 getAllNestedFiles(functionsPath, functionFiles);
 for (const file of functionFiles) {
-    const customFunction = require(file);
-    if ('name' in customFunction && 'execute' in customFunction)
-        client.functions.set(customFunction.name, customFunction);
-    else
-        console.log(`The custom function ${file} is missing a name or executable.`);
+    let customFunctions = await import(file);
+    // Convert to a list if it's not already. Some files are [{name, exe}, ...], some are {name, exe}
+    if(!(Array.isArray(customFunctions)))
+        customFunctions = [customFunctions];
+
+    for(let functionObject of customFunctions){
+        if ('name' in functionObject && 'execute' in functionObject){
+            if (client.functions.get(functionObject.name)) //Ugly if
+                console.log(`[WARN] Function ${functionObject.name} already exists and was overwritten!`);
+            client.functions.set(functionObject.name, functionObject);
+        }
+        else
+            console.log(`A function object in ${file} is missing a name or executable.`);
+    }
 }
 
 // Install event handlers
 // Commands and functions are executed via the interactionCreate event, loaded here
 //https://discordjs.guide/creating-your-bot/event-handling.html#reading-event-files
+console.log("events")
 const eventsPath = path.join(__dirname, 'lib/events');
+console.log(eventsPath)
 const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+console.log(eventFiles)
 for (const file of eventFiles) {
     const filePath = path.join(eventsPath, file);
-    const event = require(filePath);
+    const event = await import(filePath);
     if (event.once) {
         client.once(event.name, (...args) => event.execute(...args));
     } else {
